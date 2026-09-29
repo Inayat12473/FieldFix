@@ -68,7 +68,7 @@ def seed_users(db: Session):
         {
             "email": "admin@fieldfix.com",
             "password": "Admin@123",
-            "full_name": "Inayat Sanadi Admin",
+            "full_name": "Inayat Sanadi",
             "phone": "+91-9800000001",
             "role_id": admin_role.id,
         },
