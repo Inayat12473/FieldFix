@@ -1355,7 +1355,56 @@
           </div>
         `).join('');
 
+        let actionsHtml = '';
+        if (detail.status === 'NEW') {
+          actionsHtml = `
+            <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: var(--radius-md); padding: 0.75rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <span style="font-size: 0.8rem; color: #A5B4FC;">Ready to dispatch to a certified technician:</span>
+              <button class="btn btn-primary btn-sm" onclick="closeModal('inspectModal'); openAssignModal('${detail.request_id}');">
+                👷 Assign Technician
+              </button>
+            </div>
+          `;
+        } else if (detail.status === 'ASSIGNED') {
+          actionsHtml = `
+            <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-md); padding: 0.75rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <span style="font-size: 0.8rem; color: #FCD34D;">Assigned to ${escapeHtml(detail.assigned_technician_name || 'technician')}. Advance to Accepted:</span>
+              <button class="btn btn-primary btn-sm" onclick="advanceRequestStatus('${detail.request_id}', 'ACCEPTED', 'Accepted via Dispatcher Console')">
+                ✅ Accept Job (Advance)
+              </button>
+            </div>
+          `;
+        } else if (detail.status === 'ACCEPTED') {
+          actionsHtml = `
+            <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: var(--radius-md); padding: 0.75rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <span style="font-size: 0.8rem; color: #67E8F9;">Job accepted. Ready to dispatch transit:</span>
+              <button class="btn btn-primary btn-sm" onclick="advanceRequestStatus('${detail.request_id}', 'EN_ROUTE', 'Departed for customer site')">
+                🚗 Mark En Route (In Transit)
+              </button>
+            </div>
+          `;
+        } else if (detail.status === 'EN_ROUTE') {
+          actionsHtml = `
+            <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: var(--radius-md); padding: 0.75rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <span style="font-size: 0.8rem; color: #A5B4FC;">Technician in transit. Mark arrival on-site:</span>
+              <button class="btn btn-primary btn-sm" onclick="advanceRequestStatus('${detail.request_id}', 'IN_PROGRESS', 'Arrived on-site and commenced service diagnostics')">
+                ⚡ Mark In Progress (Work Started)
+              </button>
+            </div>
+          `;
+        } else if (detail.status === 'IN_PROGRESS') {
+          actionsHtml = `
+            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 0.75rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <span style="font-size: 0.8rem; color: #6EE7B7;">Maintenance in progress. Mark job complete:</span>
+              <button class="btn btn-primary btn-sm" onclick="advanceRequestStatus('${detail.request_id}', 'COMPLETED', 'Service completed and verified')">
+                🏁 Mark Completed
+              </button>
+            </div>
+          `;
+        }
+
         body.innerHTML = `
+          ${actionsHtml}
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; background: var(--bg-card); padding: 1rem; border-radius: var(--radius-md);">
             <div>
               <div style="font-size: 0.75rem; color: var(--text-muted);">Customer</div>
@@ -1392,6 +1441,28 @@
         `;
       } catch (err) {
         body.innerHTML = `<div style="color: #F87171; padding: 2rem; text-align: center;">Error loading request: ${err.message}</div>`;
+      }
+    }
+
+    async function advanceRequestStatus(reqId, nextStatus, note) {
+      try {
+        const res = await fetch(`/api/v1/service-requests/${reqId}/status`, {
+          method: 'POST',
+          headers: {
+            ...authHeader(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ status: nextStatus, note: note || 'Updated via Admin Dispatcher Console' })
+        });
+        if (res.ok) {
+          await loadAllData();
+          openInspectModal(reqId);
+        } else {
+          const err = await res.json();
+          alert('Failed to update status: ' + (err.detail || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Network error: ' + e.message);
       }
     }
 

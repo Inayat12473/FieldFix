@@ -14,6 +14,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   FlatList,
+  Alert,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -107,7 +108,17 @@ export default function CustomerDashboard({
                   )}
                 </TouchableOpacity>
               )}
-              <TouchableOpacity onPress={logout} style={styles.avatar}>
+              <TouchableOpacity
+                onPress={() => {
+                  Alert.alert(
+                    user?.full_name || 'My Account',
+                    `Email: ${user?.email || 'N/A'}\nRole: Customer\nPhone: ${user?.phone || 'Not provided'}`,
+                    [{ text: 'Close' }]
+                  );
+                }}
+                style={styles.avatar}
+                activeOpacity={0.8}
+              >
                 <Text style={styles.avatarText}>
                   {user?.full_name?.charAt(0)?.toUpperCase() || 'C'}
                 </Text>
