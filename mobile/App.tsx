@@ -9,10 +9,13 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from './src/store/authStore';
 import { Colors, Typography, Spacing, BorderRadius } from './src/constants/theme';
+import Button from './src/components/Button';
+import { BASE_URL } from './src/services/api';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
 import CustomerDashboard from './src/screens/customer/CustomerDashboard';
@@ -152,39 +155,40 @@ export default function App() {
         />
       );
 
-    case 'admin':
+    case 'admin': {
+      const adminWebUrl = `${BASE_URL.replace('/api/v1', '')}/admin/`;
       return (
         <View style={styles.adminFallback}>
           <StatusBar style="dark" />
           <Text style={styles.adminIcon}>⚙️</Text>
           <Text style={styles.adminTitle}>Admin Dispatcher Console</Text>
           <Text style={styles.adminSubtitle}>
-            The FieldFix Fleet Operations & Dispatcher Console is accessible in the web browser at:{'\n'}
-            http://localhost:8000/admin/
+            The FieldFix Fleet Operations & Dispatcher Console is optimized for desktop browsers at:{'\n'}
+            {adminWebUrl}
           </Text>
           <View style={styles.adminInfo}>
             <Text style={styles.adminInfoLabel}>Logged in as Administrator</Text>
             <Text style={styles.adminInfoValue}>{user.full_name}</Text>
-            <Text style={styles.adminInfoValue}>{user.email}</Text>
+            <Text style={[styles.adminInfoValue, { color: Colors.textSecondary, marginTop: Spacing.xs }]}>{user.email}</Text>
           </View>
-          <Text
-            style={[styles.signOutLink, { marginBottom: Spacing.xl, color: Colors.primary }]}
-            onPress={() => {
-              import('react-native').then(({ Linking }) => {
-                Linking.openURL('http://localhost:8000/admin/');
-              });
-            }}
-          >
-            Launch Web Console (http://localhost:8000/admin/) →
-          </Text>
-          <Text
-            style={styles.signOutLink}
-            onPress={() => useAuthStore.getState().logout()}
-          >
-            Sign Out
-          </Text>
+          <View style={{ width: '100%', marginTop: Spacing.xxl }}>
+            <Button
+              title="Launch Web Console"
+              onPress={() => Linking.openURL(adminWebUrl)}
+              variant="primary"
+              fullWidth
+              style={{ marginBottom: Spacing.md }}
+            />
+            <Button
+              title="Sign Out"
+              onPress={() => useAuthStore.getState().logout()}
+              variant="outline"
+              fullWidth
+            />
+          </View>
         </View>
       );
+    }
 
     default:
       return (

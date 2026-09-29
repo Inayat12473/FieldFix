@@ -285,6 +285,22 @@
       outline: none;
     }
 
+    .form-input {
+      width: 100%;
+      background: var(--bg-surface);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 0.65rem 1rem;
+      border-radius: var(--radius-md);
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-glow);
+    }
+
     /* Kanban Columns */
     .kanban-grid {
       display: grid;
@@ -851,53 +867,180 @@
         <button class="btn btn-outline" onclick="closeModal('inspectModal')">Close</button>
       </div>
     </div>
+  <!-- ADMIN LOGIN MODAL -->
+  <div class="modal-backdrop" id="loginModal">
+    <div class="modal-dialog" style="max-width: 440px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div class="brand-icon" style="width: 34px; height: 34px; font-size: 1.1rem;">🔧</div>
+          <div class="modal-title">Admin Dispatcher Login</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('loginModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem;">
+          Sign in with administrator credentials to manage field requests, dispatch technicians, and monitor fleet operations.
+        </p>
+
+        <div id="loginErrorBanner" style="display: none; background: rgba(244, 63, 94, 0.15); border: 1px solid var(--accent-rose); color: #FDA4AF; padding: 0.75rem; border-radius: var(--radius-sm); font-size: 0.85rem; margin-bottom: 1rem;"></div>
+
+        <form id="adminLoginForm" onsubmit="event.preventDefault(); submitAdminLogin();">
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.35rem;">Email Address</label>
+            <input type="email" id="adminEmailInput" class="form-input" placeholder="admin@fieldfix.com" value="admin@fieldfix.com" required autocomplete="email">
+          </div>
+
+          <div style="margin-bottom: 1.25rem;">
+            <label style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.35rem;">Password</label>
+            <input type="password" id="adminPasswordInput" class="form-input" placeholder="••••••••" value="Admin@123" required autocomplete="current-password">
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem;" id="loginSubmitBtn">
+            Sign In as Administrator
+          </button>
+        </form>
+
+        <div style="text-align: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-light);">
+          <button type="button" class="btn btn-outline btn-sm" style="width: 100%; justify-content: center;" onclick="quickDemoAdmin()">
+            ⚡ Fill Demo Admin Credentials
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
     let token = localStorage.getItem('fieldfix_admin_token') || '';
+    let currentUser = null;
+    try {
+      currentUser = JSON.parse(localStorage.getItem('fieldfix_admin_user') || 'null');
+    } catch(e) { currentUser = null; }
+
     let allRequests = [];
     let allTechnicians = [];
     let selectedRequestId = null;
     let selectedTechId = null;
+    let pollTimer = null;
 
-    // Fast Admin Login
-    async function demoAdminLogin() {
-      try {
-        const res = await fetch('/api/v1/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'admin@fieldfix.com', password: 'Admin@123' })
-        });
-        const data = await res.json();
-        if (data.access_token) {
-          token = data.access_token;
-          localStorage.setItem('fieldfix_admin_token', token);
-          updateAuthUI(data.user);
-          loadAllData();
-        } else {
-          alert('Login failed: ' + (data.detail || 'Invalid credentials'));
-        }
-      } catch (err) {
-        alert('Could not authenticate: ' + err.message);
-      }
+    function openModal(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('open');
+    }
+
+    function closeModal(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('open');
     }
 
     function updateAuthUI(user) {
+      currentUser = user;
       const container = document.getElementById('authContainer');
-      if (token) {
+      if (token && currentUser) {
         container.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <span style="font-size: 0.8rem; color: #818CF8; font-weight: 600;">👑 Admin Active</span>
-            <button class="btn btn-outline btn-sm" onclick="logoutAdmin()">Logout</button>
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div style="display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2;">
+              <span style="font-size: 0.85rem; color: #fff; font-weight: 600;">👑 ${escapeHtml(currentUser.full_name || 'Admin')}</span>
+              <span style="font-size: 0.7rem; color: var(--text-muted);">${escapeHtml(currentUser.email || '')}</span>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="logoutAdmin()" title="Sign Out of Admin Console">
+              Sign Out
+            </button>
           </div>
+        `;
+      } else {
+        container.innerHTML = `
+          <button class="btn btn-primary btn-sm" onclick="openModal('loginModal')">
+            🔐 Admin Sign In
+          </button>
         `;
       }
     }
 
+    async function submitAdminLogin() {
+      const email = document.getElementById('adminEmailInput').value.trim();
+      const password = document.getElementById('adminPasswordInput').value;
+      const errBanner = document.getElementById('loginErrorBanner');
+      const submitBtn = document.getElementById('loginSubmitBtn');
+      errBanner.style.display = 'none';
+
+      if (!email || !password) {
+        errBanner.innerText = 'Please enter both email and password.';
+        errBanner.style.display = 'block';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Authenticating...';
+
+      try {
+        const res = await fetch('/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (res.ok && data.access_token) {
+          if (data.user?.role !== 'admin') {
+            errBanner.innerText = `Access denied: Account '${email}' has role '${data.user?.role}'. Only users with the 'admin' role can access this dispatcher console.`;
+            errBanner.style.display = 'block';
+            return;
+          }
+          token = data.access_token;
+          currentUser = data.user;
+          localStorage.setItem('fieldfix_admin_token', token);
+          localStorage.setItem('fieldfix_admin_user', JSON.stringify(currentUser));
+          updateAuthUI(currentUser);
+          closeModal('loginModal');
+          loadAllData();
+          startPolling();
+        } else {
+          errBanner.innerText = data.detail || 'Invalid email or password. Please verify your credentials.';
+          errBanner.style.display = 'block';
+        }
+      } catch (err) {
+        errBanner.innerText = 'Network error: ' + err.message;
+        errBanner.style.display = 'block';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Sign In as Administrator';
+      }
+    }
+
+    function quickDemoAdmin() {
+      document.getElementById('adminEmailInput').value = 'admin@fieldfix.com';
+      document.getElementById('adminPasswordInput').value = 'Admin@123';
+      submitAdminLogin();
+    }
+
     function logoutAdmin() {
+      stopPolling();
       token = '';
+      currentUser = null;
       localStorage.removeItem('fieldfix_admin_token');
-      location.reload();
+      localStorage.removeItem('fieldfix_admin_user');
+      updateAuthUI(null);
+
+      // Clear operational state from view
+      allRequests = [];
+      allTechnicians = [];
+      renderBoard();
+      updateKPIs();
+      renderFleet();
+      renderReviews();
+
+      openModal('loginModal');
+    }
+
+    function startPolling() {
+      stopPolling();
+      pollTimer = setInterval(loadAllData, 20000);
+    }
+
+    function stopPolling() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
     }
 
     function authHeader() {
@@ -905,19 +1048,24 @@
     }
 
     async function loadAllData() {
+      if (!token) {
+        openModal('loginModal');
+        return;
+      }
+
       const refreshBtn = document.getElementById('refreshBtn');
-      refreshBtn.innerHTML = '⏳ Loading...';
+      if (refreshBtn) refreshBtn.innerHTML = '⏳ Loading...';
 
       try {
-        // Auto-login demo admin if not logged in
-        if (!token) {
-          await demoAdminLogin();
-        }
-
         const [reqRes, techRes] = await Promise.all([
           fetch('/api/v1/service-requests?per_page=100', { headers: authHeader() }),
           fetch('/api/v1/technicians', { headers: authHeader() }),
         ]);
+
+        if (reqRes.status === 401 || techRes.status === 401) {
+          logoutAdmin();
+          return;
+        }
 
         if (reqRes.ok) {
           const reqData = await reqRes.json();
@@ -932,9 +1080,9 @@
           renderFleet();
         }
       } catch (e) {
-        console.error(e);
+        console.error('Failed to load fleet data:', e);
       } finally {
-        refreshBtn.innerHTML = '🔄 Refresh';
+        if (refreshBtn) refreshBtn.innerHTML = '🔄 Refresh';
       }
     }
 
@@ -1271,9 +1419,32 @@
         .replace(/"/g, '&quot;');
     }
 
-    // Auto load on init
-    loadAllData();
-    setInterval(loadAllData, 20000); // Auto-poll every 20s
+    async function initApp() {
+      if (token) {
+        try {
+          const res = await fetch('/api/v1/auth/me', { headers: authHeader() });
+          if (res.ok) {
+            currentUser = await res.json();
+            if (currentUser.role === 'admin') {
+              localStorage.setItem('fieldfix_admin_user', JSON.stringify(currentUser));
+              updateAuthUI(currentUser);
+              loadAllData();
+              startPolling();
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('Session check failed:', e);
+        }
+        logoutAdmin();
+      } else {
+        updateAuthUI(null);
+        openModal('loginModal');
+      }
+    }
+
+    // Initialize application
+    initApp();
   </script>
 </body>
 </html>
